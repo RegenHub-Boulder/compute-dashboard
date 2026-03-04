@@ -208,7 +208,7 @@ export default function App() {
   const onlineCount = all.filter((d) => results[d.id]?.status === 'online').length
 
   return (
-    <div className="h-screen flex flex-col text-[15px]">
+    <div className="flex flex-col text-[15px]" style={{ height: '100dvh' }}>
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
         <h1 className="text-xl font-bold text-slate-500 tracking-wide">NETWORK STATUS</h1>
