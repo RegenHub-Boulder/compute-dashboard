@@ -211,10 +211,7 @@ export default function App() {
     <div className="h-screen flex flex-col text-[15px]">
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
-        <div className="flex items-baseline gap-3">
-          <h1 className="text-xl font-bold text-white tracking-tight">REGENHUB</h1>
-          <span className="text-sm text-slate-500 tracking-wide">NETWORK STATUS</span>
-        </div>
+        <h1 className="text-xl font-bold text-slate-500 tracking-wide">NETWORK STATUS</h1>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5 text-sm">
             <span className="text-emerald-400 font-bold tabular-nums">{onlineCount}</span>
@@ -266,7 +263,11 @@ export default function App() {
       {/* Footer */}
       <div className="px-4 py-2 border-t border-white/[0.04] flex items-center justify-between text-[11px] text-slate-600 tracking-wide">
         <span>AUTO-REFRESH {POLL_INTERVAL / 1000}s {source && `· VIA ${source.toUpperCase()}`}</span>
-        <span>CLICK NAME TO RENAME</span>
+        <div className="flex items-center gap-3">
+          <a href="https://regenhub.build/project/l4ko8g0c480owocs4k8k04gg/environment/jcgckko8448w8cok8kscgwso/application/m8swgcgc0sk4oc0swkccowk4" target="_blank" rel="noopener" className="hover:text-slate-400 transition-colors">coolify</a>
+          <span className="text-slate-700">·</span>
+          <a href="https://github.com/RegenHub-Boulder/compute-dashboard/blob/main/README.md" target="_blank" rel="noopener" className="hover:text-slate-400 transition-colors">github</a>
+        </div>
       </div>
     </div>
   )
