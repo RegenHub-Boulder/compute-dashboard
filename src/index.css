@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: 'Mono';
+  src: local('SF Mono'), local('JetBrains Mono'), local('Fira Code'), local('Menlo'), local('Consolas');
+}
+
+body {
+  margin: 0;
+  background: #050507;
+  color: #c8d0db;
+  font-family: 'Mono', 'SF Mono', 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  -webkit-font-smoothing: antialiased;
+}
