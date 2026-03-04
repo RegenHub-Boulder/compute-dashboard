@@ -10,20 +10,16 @@ body {
 
 @keyframes splitFlapFlip {
   0% {
-    transform: scaleY(1);
-    filter: brightness(1);
+    opacity: 1;
   }
-  45% {
-    transform: scaleY(0.08);
-    filter: brightness(0.4);
+  40% {
+    opacity: 0.8;
   }
-  55% {
-    transform: scaleY(0.08);
-    filter: brightness(0.4);
+  60% {
+    opacity: 0.8;
   }
   100% {
-    transform: scaleY(1);
-    filter: brightness(1);
+    opacity: 1;
   }
 }
 

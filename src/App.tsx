@@ -8,12 +8,12 @@ const STAGGER_MS = 120
 
 function StatusIndicator({ status }: { status: PingStatus }) {
   if (status === 'checking') {
-    return <span className="text-amber-400 text-2xl tracking-widest animate-pulse">WAIT</span>
+    return <span className="text-amber-400 tracking-widest animate-pulse">WAIT</span>
   }
   if (status === 'online') {
-    return <span className="text-emerald-400 text-2xl tracking-widest">UP</span>
+    return <span className="text-emerald-400 tracking-widest">UP</span>
   }
-  return <span className="text-red-400 text-2xl tracking-widest">DOWN</span>
+  return <span className="text-red-400 tracking-widest">DOWN</span>
 }
 
 function Latency({ ms }: { ms: number | null }) {
@@ -56,20 +56,22 @@ function EditableLabel({
           if (e.key === 'Enter') save()
           if (e.key === 'Escape') { setValue(label); setEditing(false) }
         }}
-        className="bg-transparent text-white font-bold text-[28px] outline-none border-b border-amber-400/50 w-full"
+        className="bg-transparent text-white font-bold outline-none border-b border-amber-400/50 w-full"
       />
     )
   }
 
   return (
     <span
-      className="text-white font-bold text-[28px] cursor-pointer hover:text-amber-300 transition-colors truncate"
+      className="text-white font-bold cursor-pointer hover:text-amber-300 transition-colors truncate"
       onClick={() => { setValue(label); setEditing(true) }}
     >
       {label}
     </span>
   )
 }
+
+const GRID_COLS = '3.5rem 1fr 9rem 4.5rem 5.5rem'
 
 function DeviceRow({
   device,
@@ -89,28 +91,28 @@ function DeviceRow({
   const status = result?.status ?? 'checking'
 
   return (
-    <div className={`relative overflow-hidden ${isChild ? 'pl-12' : ''}`}>
+    <div className={`relative overflow-hidden ${isChild ? 'pl-8' : ''}`}>
       <div
-        className={`grid items-center gap-x-4 px-6 py-4 border-b border-white/[0.04] hover:bg-white/[0.02] transition-all duration-300 ${
+        className={`grid items-center gap-x-4 px-4 py-[10px] border-b border-white/[0.04] hover:bg-white/[0.02] transition-all duration-300 ${
           flipping ? 'split-flap-flip' : ''
         }`}
-        style={{ gridTemplateColumns: '6rem 1fr 10rem 6rem 7rem' }}
+        style={{ gridTemplateColumns: GRID_COLS }}
       >
         <StatusIndicator status={status} />
 
-        <div className="flex items-center gap-3 min-w-0">
-          {isChild && <span className="text-slate-600 text-2xl">&#x2514;</span>}
+        <div className="flex items-center gap-2 min-w-0">
+          {isChild && <span className="text-slate-600">&#x2514;</span>}
           <EditableLabel label={label} onSave={onLabelChange} />
         </div>
 
-        <span className="text-slate-400 text-2xl tabular-nums">{device.ip}</span>
+        <span className="text-slate-400 tabular-nums">{device.ip}</span>
 
-        <span className="text-2xl tabular-nums text-right">
+        <span className="tabular-nums text-right">
           <Latency ms={result?.latency ?? null} />
         </span>
 
-        <span className="text-2xl text-slate-600 text-right tabular-nums">
-          {result?.lastChecked ? result.lastChecked.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'}
+        <span className="text-slate-600 text-right tabular-nums whitespace-nowrap">
+          {result?.lastChecked ? result.lastChecked.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'}
         </span>
       </div>
     </div>
@@ -120,19 +122,18 @@ function DeviceRow({
 function GroupHeader({ name }: { name: string }) {
   return (
     <div
-      className="grid items-center gap-x-4 px-6 py-3 bg-white/[0.03] border-b border-white/[0.06]"
-      style={{ gridTemplateColumns: '6rem 1fr 10rem 6rem 7rem' }}
+      className="grid items-center gap-x-4 px-4 py-1.5 bg-white/[0.03] border-b border-white/[0.06] text-[11px]"
+      style={{ gridTemplateColumns: GRID_COLS }}
     >
       <span />
-      <span className="text-xl font-bold uppercase tracking-[0.2em] text-slate-500">{name}</span>
-      <span className="text-xl uppercase tracking-[0.15em] text-slate-600">Address</span>
-      <span className="text-xl uppercase tracking-[0.15em] text-slate-600 text-right">Ping</span>
-      <span className="text-xl uppercase tracking-[0.15em] text-slate-600 text-right">Checked</span>
+      <span className="font-bold uppercase tracking-[0.2em] text-slate-500">{name}</span>
+      <span className="uppercase tracking-[0.15em] text-slate-600">Address</span>
+      <span className="uppercase tracking-[0.15em] text-slate-600 text-right">Ping</span>
+      <span className="uppercase tracking-[0.15em] text-slate-600 text-right">Checked</span>
     </div>
   )
 }
 
-// Flatten device order for stagger indexing
 function flatDeviceOrder(): string[] {
   const ids: string[] = []
   for (const g of groups) {
@@ -159,11 +160,9 @@ export default function App() {
     const all = allDevices()
     const order = flatDeviceOrder()
 
-    // Ping all at once (rows keep their current values while we wait)
     const ips = all.map((d) => d.ip)
     const byIp = await doPingAll(ips)
 
-    // Build results keyed by device ID
     const byId: Record<string, PingResult> = {}
     for (const d of all) {
       byId[d.id] = byIp[d.ip] ?? { status: 'offline', latency: null, lastChecked: new Date(), source: 'direct' }
@@ -171,18 +170,14 @@ export default function App() {
 
     setSource(Object.values(byIp)[0]?.source ?? null)
 
-    // Clear any pending staggers
     for (const t of staggerTimers.current) clearTimeout(t)
     staggerTimers.current = []
 
-    // Stagger reveal: flip and update each row one at a time, top to bottom
     order.forEach((id, i) => {
       const timer = setTimeout(() => {
-        // Start the flip animation
         setFlipping((prev) => new Set(prev).add(id))
         setResults((prev) => ({ ...prev, [id]: byId[id] }))
 
-        // Remove flip class after animation completes
         const clearTimer = setTimeout(() => {
           setFlipping((prev) => {
             const next = new Set(prev)
@@ -213,15 +208,15 @@ export default function App() {
   const onlineCount = all.filter((d) => results[d.id]?.status === 'online').length
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-screen flex flex-col text-[15px]">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-6 py-6 border-b border-white/[0.06]">
-        <div className="flex items-baseline gap-5">
-          <h1 className="text-4xl font-bold text-white tracking-tight">REGENHUB</h1>
-          <span className="text-2xl text-slate-500 tracking-wide">NETWORK STATUS</span>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-xl font-bold text-white tracking-tight">REGENHUB</h1>
+          <span className="text-sm text-slate-500 tracking-wide">NETWORK STATUS</span>
         </div>
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-3 text-2xl">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5 text-sm">
             <span className="text-emerald-400 font-bold tabular-nums">{onlineCount}</span>
             <span className="text-slate-600">/</span>
             <span className="text-slate-400 tabular-nums">{all.length}</span>
@@ -230,7 +225,7 @@ export default function App() {
           <button
             onClick={pingAllDevices}
             disabled={refreshing}
-            className="text-2xl tracking-wide px-5 py-2.5 border border-white/10 text-slate-400 hover:text-white hover:border-white/20 transition-all disabled:opacity-40"
+            className="text-sm tracking-wide px-3 py-1.5 border border-white/10 text-slate-400 hover:text-white hover:border-white/20 transition-all disabled:opacity-40"
           >
             {refreshing ? 'SCANNING...' : 'REFRESH'}
           </button>
@@ -238,7 +233,7 @@ export default function App() {
       </div>
 
       {/* Table */}
-      <div className="flex-1">
+      <div className="flex-1 overflow-hidden">
         {groups.map((group) => (
           <div key={group.name}>
             <GroupHeader name={group.name} />
@@ -269,7 +264,7 @@ export default function App() {
       </div>
 
       {/* Footer */}
-      <div className="px-6 py-4 border-t border-white/[0.04] flex items-center justify-between text-xl text-slate-600 tracking-wide">
+      <div className="px-4 py-2 border-t border-white/[0.04] flex items-center justify-between text-[11px] text-slate-600 tracking-wide">
         <span>AUTO-REFRESH {POLL_INTERVAL / 1000}s {source && `· VIA ${source.toUpperCase()}`}</span>
         <span>CLICK NAME TO RENAME</span>
       </div>
