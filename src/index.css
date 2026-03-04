@@ -1,14 +1,33 @@
 @import "tailwindcss";
 
-@font-face {
-  font-family: 'Mono';
-  src: local('SF Mono'), local('JetBrains Mono'), local('Fira Code'), local('Menlo'), local('Consolas');
-}
-
 body {
   margin: 0;
   background: #050507;
   color: #c8d0db;
-  font-family: 'Mono', 'SF Mono', 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
   -webkit-font-smoothing: antialiased;
+}
+
+@keyframes splitFlapFlip {
+  0% {
+    transform: scaleY(1);
+    filter: brightness(1);
+  }
+  45% {
+    transform: scaleY(0.08);
+    filter: brightness(0.4);
+  }
+  55% {
+    transform: scaleY(0.08);
+    filter: brightness(0.4);
+  }
+  100% {
+    transform: scaleY(1);
+    filter: brightness(1);
+  }
+}
+
+.split-flap-flip {
+  animation: splitFlapFlip 0.3s ease-in-out 1;
+  transform-origin: center center;
 }

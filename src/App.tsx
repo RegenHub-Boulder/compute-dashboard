@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { groups, allDevices, type Device } from './devices'
-import { pingHost, type PingResult, type PingStatus } from './ping'
+import { pingAll as doPingAll, type PingResult, type PingStatus } from './ping'
 import { useLabels } from './useLabels'
 
 const POLL_INTERVAL = 15_000
+const STAGGER_MS = 120
 
 function StatusIndicator({ status }: { status: PingStatus }) {
   if (status === 'checking') {
@@ -76,43 +77,42 @@ function DeviceRow({
   label,
   onLabelChange,
   isChild,
+  flipping,
 }: {
   device: Device
   result: PingResult | undefined
   label: string
   onLabelChange: (v: string) => void
   isChild?: boolean
+  flipping?: boolean
 }) {
   const status = result?.status ?? 'checking'
 
   return (
-    <div
-      className={`grid items-center gap-x-3 px-4 py-2.5 border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors ${
-        isChild ? 'pl-10' : ''
-      }`}
-      style={{ gridTemplateColumns: '4.5rem 1fr 8rem 4rem 5.5rem' }}
-    >
-      {/* Status */}
-      <StatusIndicator status={status} />
+    <div className={`relative overflow-hidden ${isChild ? 'pl-6' : ''}`}>
+      <div
+        className={`grid items-center gap-x-3 px-4 py-2.5 border-b border-white/[0.04] hover:bg-white/[0.02] transition-all duration-300 ${
+          flipping ? 'split-flap-flip' : ''
+        }`}
+        style={{ gridTemplateColumns: '4.5rem 1fr 8rem 4rem 5.5rem' }}
+      >
+        <StatusIndicator status={status} />
 
-      {/* Name */}
-      <div className="flex items-center gap-2 min-w-0">
-        {isChild && <span className="text-slate-600 text-xs">&#x2514;</span>}
-        <EditableLabel label={label} onSave={onLabelChange} />
+        <div className="flex items-center gap-2 min-w-0">
+          {isChild && <span className="text-slate-600 text-xs">&#x2514;</span>}
+          <EditableLabel label={label} onSave={onLabelChange} />
+        </div>
+
+        <span className="text-slate-400 text-xs tabular-nums">{device.ip}</span>
+
+        <span className="text-xs tabular-nums text-right">
+          <Latency ms={result?.latency ?? null} />
+        </span>
+
+        <span className="text-xs text-slate-600 text-right tabular-nums">
+          {result?.lastChecked ? result.lastChecked.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'}
+        </span>
       </div>
-
-      {/* IP */}
-      <span className="text-slate-400 text-xs tabular-nums">{device.ip}</span>
-
-      {/* Latency */}
-      <span className="text-xs tabular-nums text-right">
-        <Latency ms={result?.latency ?? null} />
-      </span>
-
-      {/* Last check */}
-      <span className="text-xs text-slate-600 text-right tabular-nums">
-        {result?.lastChecked ? result.lastChecked.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'}
-      </span>
     </div>
   )
 }
@@ -132,36 +132,82 @@ function GroupHeader({ name }: { name: string }) {
   )
 }
 
+// Flatten device order for stagger indexing
+function flatDeviceOrder(): string[] {
+  const ids: string[] = []
+  for (const g of groups) {
+    for (const d of g.devices) {
+      ids.push(d.id)
+      if (d.children) {
+        for (const c of d.children) ids.push(c.id)
+      }
+    }
+  }
+  return ids
+}
+
 export default function App() {
   const [results, setResults] = useState<Record<string, PingResult>>({})
   const [refreshing, setRefreshing] = useState(false)
+  const [flipping, setFlipping] = useState<Set<string>>(new Set())
   const { getLabel, setLabel } = useLabels()
+  const [source, setSource] = useState<'server' | 'direct' | null>(null)
+  const staggerTimers = useRef<ReturnType<typeof setTimeout>[]>([])
 
-  const pingAll = useCallback(async () => {
+  const pingAllDevices = useCallback(async () => {
     setRefreshing(true)
     const all = allDevices()
-    setResults((prev) => {
-      const next = { ...prev }
-      for (const d of all) {
-        next[d.id] = { status: 'checking', latency: null, lastChecked: prev[d.id]?.lastChecked ?? new Date() }
-      }
-      return next
-    })
+    const order = flatDeviceOrder()
 
-    await Promise.all(
-      all.map(async (d) => {
-        const result = await pingHost(d.ip)
-        setResults((prev) => ({ ...prev, [d.id]: result }))
-      })
-    )
-    setRefreshing(false)
+    // Ping all at once (rows keep their current values while we wait)
+    const ips = all.map((d) => d.ip)
+    const byIp = await doPingAll(ips)
+
+    // Build results keyed by device ID
+    const byId: Record<string, PingResult> = {}
+    for (const d of all) {
+      byId[d.id] = byIp[d.ip] ?? { status: 'offline', latency: null, lastChecked: new Date(), source: 'direct' }
+    }
+
+    setSource(Object.values(byIp)[0]?.source ?? null)
+
+    // Clear any pending staggers
+    for (const t of staggerTimers.current) clearTimeout(t)
+    staggerTimers.current = []
+
+    // Stagger reveal: flip and update each row one at a time, top to bottom
+    order.forEach((id, i) => {
+      const timer = setTimeout(() => {
+        // Start the flip animation
+        setFlipping((prev) => new Set(prev).add(id))
+        setResults((prev) => ({ ...prev, [id]: byId[id] }))
+
+        // Remove flip class after animation completes
+        const clearTimer = setTimeout(() => {
+          setFlipping((prev) => {
+            const next = new Set(prev)
+            next.delete(id)
+            return next
+          })
+        }, 350)
+        staggerTimers.current.push(clearTimer)
+
+        if (i === order.length - 1) {
+          setRefreshing(false)
+        }
+      }, i * STAGGER_MS)
+      staggerTimers.current.push(timer)
+    })
   }, [])
 
   useEffect(() => {
-    pingAll()
-    const interval = setInterval(pingAll, POLL_INTERVAL)
-    return () => clearInterval(interval)
-  }, [pingAll])
+    pingAllDevices()
+    const interval = setInterval(pingAllDevices, POLL_INTERVAL)
+    return () => {
+      clearInterval(interval)
+      for (const t of staggerTimers.current) clearTimeout(t)
+    }
+  }, [pingAllDevices])
 
   const all = allDevices()
   const onlineCount = all.filter((d) => results[d.id]?.status === 'online').length
@@ -182,7 +228,7 @@ export default function App() {
             <span className="text-slate-600">ONLINE</span>
           </div>
           <button
-            onClick={pingAll}
+            onClick={pingAllDevices}
             disabled={refreshing}
             className="text-xs tracking-wide px-3 py-1.5 border border-white/10 text-slate-400 hover:text-white hover:border-white/20 transition-all disabled:opacity-40"
           >
@@ -203,6 +249,7 @@ export default function App() {
                   result={results[device.id]}
                   label={getLabel(device.id, device.defaultLabel)}
                   onLabelChange={(v) => setLabel(device.id, v)}
+                  flipping={flipping.has(device.id)}
                 />
                 {device.children?.map((child) => (
                   <DeviceRow
@@ -212,6 +259,7 @@ export default function App() {
                     label={getLabel(child.id, child.defaultLabel)}
                     onLabelChange={(v) => setLabel(child.id, v)}
                     isChild
+                    flipping={flipping.has(child.id)}
                   />
                 ))}
               </div>
@@ -222,7 +270,7 @@ export default function App() {
 
       {/* Footer */}
       <div className="px-5 py-3 border-t border-white/[0.04] flex items-center justify-between text-[10px] text-slate-600 tracking-wide">
-        <span>AUTO-REFRESH {POLL_INTERVAL / 1000}s</span>
+        <span>AUTO-REFRESH {POLL_INTERVAL / 1000}s {source && `· VIA ${source.toUpperCase()}`}</span>
         <span>CLICK NAME TO RENAME</span>
       </div>
     </div>
